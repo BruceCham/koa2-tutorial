@@ -51,6 +51,8 @@ module.exports = () => {
   return async (ctx, next) => {
     try {
        await next();
+       /*如果没有更改过response的status，则koa默认的status是404*/
+       if (ctx.response.status === 404 && !ctx.response.body) ctx.throw(404);
     } catch (e) {
        /*此处进行错误处理，下面会讲解具体实现*/
     }
@@ -68,10 +70,10 @@ let fileName = 'other';
 ...
 try {
     await next();
+    /*如果没有更改过response的status，则koa默认的status是404*/
+    if (ctx.response.status === 404 && !ctx.response.body) ctx.throw(404);
 } catch (e) {
-    /*默认错误状态为500*/
-    const status = typeof e.status === 'number' ? e.status : 500;
-    let fileName = status;
+    let status = parseInt(e.status);
     /*默认错误信息为error对象上携带的message*/
     const message = e.message;
     /*对status进行处理，指定错误页面文件名*/
@@ -92,12 +94,12 @@ try {
 ```
 
 ## 渲染页面逻辑
-上面的**错误处理逻辑**其实已经对我们的错误状态进行处理了，接下来就是**渲染页面逻辑**应该做的工作了。首先我们在`mi-http-error`文件夹下新建一个默认的错误页模板`error.html`。
+上面的**错误处理逻辑**其实已经对我们的错误状态进行处理了，接下来就是**渲染页面逻辑**应该做的工作了。首先我们在`mi-http-error`文件夹下新建一个默认的错误页模板`error.html`，这里采用`nunjucks`语法。
 ```
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Error - <%- status %></title>
+    <title>Error - {{ status }}</title>
     <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <style>
     ...
@@ -105,22 +107,22 @@ try {
   </head>
   <body>
     <div id="error">
-      <h1>Error - <%- status %></h1>
-    <p>Looks like something broke!</p>
-    <% if (env === 'development') { %>
-      <h2>Message:</h2>
-      <pre>
-        <code>
-    <%- error %>
-        </code>
-      </pre>
-      <h2>Stack:</h2>
-      <pre>
-        <code>
-    <%- stack %>
-        </code>
-      </pre>
-    <% } %>
+      <h1>Error - {{ status }}</h1>
+      <p>Looks like something broke!</p>
+      {% if (env === 'development') %}
+        <h2>Message:</h2>
+        <pre>
+          <code>
+            {{ error }}
+          </code>
+        </pre>
+        <h2>Stack:</h2>
+        <pre>
+          <code>
+            {{ stack }}
+          </code>
+        </pre>
+      {% endif %}
     </div>
   </body>
 </html>
@@ -134,11 +136,11 @@ middleware/
 └─ index.js
 ```
 
-文件的读取和渲染我们交给`consolidate`来做，它是一个模板引擎统一库，支持几乎所有的模板引擎。所以我们需要提前引入该模块，另外因为牵涉到文件路径的解析，我们还需要引入`path`模块。
+因为牵涉到文件路径的解析，我们需要引入`path`模块。另外，还需要引入`nunjucks`工具来解析模板。`path`是node模块，我们只需从`npm`上安装`nunjucks`即可。执行`npm i nunjucks --save`命令，然后加入以下代码：
 ```
 // middleware/mi-http-error/index.js
 const Path = require('path');
-const consolidate = require('consolidate');
+const nunjucks = require('nunjucks');
 ```
 还记得我们需要支持自定义错误文件目录吗？所以，原来调用中间件的代码需要再改一改。我们给`http-error`传入一个配置对象，该对象中有一个字段`errorPageFolder`，它的值代表自定义错误文件目录：
 ```
@@ -168,12 +170,11 @@ module.exports = (opts) => {
 */
 const filePath = folder ? Path.join(folder, `${fileName}.html`) : templatePath;
 ```
-当然，我们还可以扩展配置对象，增加更多的自定义功能。比如，我们增加两个参数`env`、`engine`。`env`供模板渲染时使用，如果是开发环境，页面会打印出详细的错误堆栈信息，反之则不会；`engine`则用来定义渲染模板时采用何种渲染引擎。这里我们首先去取配置中的值，如果没有则使用默认值。这两个值都会在渲染的时候传入`consolidate`函数，另外还有错误堆栈信息等：
+当然，我们还可以扩展配置对象，增加更多的自定义功能。比如，我们可以增加一个参数`env`。`env`供模板渲染时使用，如果是开发环境，页面会打印出详细的错误堆栈信息，反之则不会；这个值会在渲染的时候传入`nunjucks.render`函数，另外还有错误堆栈信息等：
 ```
 // middleware/mi-http-error/index.js
 ...
 const env = opts.env || process.env.NODE_ENV || 'development';
-const engine = opts.engine || 'lodash';
 ...
 return async () => {
   try {
@@ -181,8 +182,8 @@ return async () => {
   } catch (e) {
      ...
      try {
-       /* consolidate是一个模板引擎统一库，支持几乎所有的模板引擎 */
-       const data = await consolidate[engine](filePath, {
+       /* nunjucks渲染模板文件 */
+       const data = await nunjucks.render(filePath, {
            env: env,
            status: e.status || e.message,
            error: e.message,

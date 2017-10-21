@@ -12,7 +12,6 @@
   "dependencies": {
     "browser-sync": "^2.18.13",
     "co": "^4.6.0",
-    "consolidate": "^0.14.5",
     "gulp": "^3.9.1",
     "html-minifier": "^3.5.3",
     "ip": "^1.1.5",
