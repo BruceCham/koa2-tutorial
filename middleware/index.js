@@ -9,21 +9,20 @@ module.exports = (app) => {
   /**
    * 记录URL以及页面执行时间
    */
-  // app.use(async (ctx, next) => {
-  //   let start = Date.now()
-  //   await next()
-  //   let delta = Date.now() - start
-  //   ctx.log && ctx.log.info({
-  //     responseTime: delta
-  //   })
-  // })
+  app.use(async (ctx, next) => {
+    let start = Date.now()
+    await next()
+    let delta = Date.now() - start
+    ctx.log && ctx.log.info({
+      responseTime: delta
+    })
+  })
 
   /**
    * 初始化log
    */
   // app.use(miLog(app.env, {
   //   env: app.env,
-  //   category: 'xxxxx',
   //   projectName: 'node-tutorial',
   //   appLogLevel: 'debug',
   //   dir: 'logs',
