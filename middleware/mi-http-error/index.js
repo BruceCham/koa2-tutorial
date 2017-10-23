@@ -1,5 +1,4 @@
 const Path = require('path');
-const consolidate = require('consolidate');
 
 /**
  * 模块化导出
@@ -10,7 +9,6 @@ const consolidate = require('consolidate');
 module.exports = (opts) => {
     opts = opts || {};
     const env = opts.env || process.env.NODE_ENV || 'development';
-    const engine = opts.engine || 'lodash';
     const folder = opts.errorPageFolder; // 使用自定义文件夹
     const templatePath = Path.resolve(__dirname, './error.html'); // 默认模板
     let fileName = 'other';
@@ -23,10 +21,11 @@ module.exports = (opts) => {
     return async (ctx, next) => {
         try {
             await next();
+            /*如果没有更改过response的status，则koa默认的status是404*/
+            if (ctx.response.status === 404 && !ctx.response.body) ctx.throw(404);
         } catch (e) {
             let status = parseInt(e.status);
             const message = e.message;
-            console.log('默认status', e);
             if (status >= 400) {
                 switch (status) {
                     case 400:
@@ -44,7 +43,7 @@ module.exports = (opts) => {
             // 确定最终的filePath
             const filePath = folder ? Path.join(folder, `${fileName}.html`) : templatePath;
             try {
-                const data = await consolidate[engine](filePath, {
+                const data = await nunjucks.render(filePath, {
                     env: env,
                     status: e.status || e.message,
                     error: e.message,
